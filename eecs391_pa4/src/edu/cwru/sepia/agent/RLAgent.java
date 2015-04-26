@@ -9,6 +9,8 @@ import edu.cwru.sepia.environment.model.history.DeathLog;
 import edu.cwru.sepia.environment.model.history.History;
 import edu.cwru.sepia.environment.model.state.State;
 import edu.cwru.sepia.environment.model.state.Unit;
+import edu.cwru.sepia.environment.model.state.Unit.UnitView;
+import edu.cwru.sepia.util.DistanceMetrics;
 
 import java.io.*;
 import java.util.*;
@@ -197,9 +199,9 @@ public class RLAgent extends Agent {
     			}
     			// An unidentified unit was killed and we don't know what to do with it.
     			else {
-    				System.err.println("Unknown unit killed. Exiting...");
+    				System.err.println("Unknown unit killed. Exiting with failure...");
     				System.exit(0);
-    			}    			
+    			}
     		}
 
     		// Find and display the results of completed actions from the last turn.
@@ -330,7 +332,40 @@ public class RLAgent extends Agent {
      */
     public double[] calculateFeatureVector(State.StateView stateView, History.HistoryView historyView, int attackerId, int defenderId) {
         
-    	return null;
+    	double[] featureVector = new double[NUM_FEATURES];
+    	UnitView attacker = stateView.getUnit(attackerId);
+    	UnitView defender = stateView.getUnit(defenderId);    	    	
+    	
+    	// Set the initial feature to a constant as suggested in assignment.
+    	featureVector[0] = 0.5;
+    	
+    	// Is the enemy the closest to attacker by Chebyshev distance?
+    	featureVector[1] = getChebyshevDistance(attacker.getXPosition(), 
+    											attacker.getYPosition(), 
+    											defender.getXPosition(), 
+    											defender.getYPosition());
+    	
+    	// Is the enemy being attacked by multiple footmen already?
+    	
+    	// Avoid enemies with higher health unless they are being attacked by allies...
+    	featureVector[2] = defender.getHP() > 0 ? attacker.getHP() / defender.getHP() : 1;
+    
+    	// Is this enemy currently attacking me (the footman)?
+    	
+    	return featureVector;
+    }
+    
+    /**
+     * Calculates the Chebyshev distance between two coordinates.
+     * @param x1
+     * @param y1
+     * @param x2
+     * @param y2
+     * @return
+     */
+    public double getChebyshevDistance(int x1, int y1, int x2, int y2) {
+    	
+    	return Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
     }
 
     /**
