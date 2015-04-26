@@ -13,6 +13,15 @@ import edu.cwru.sepia.environment.model.state.Unit;
 import java.io.*;
 import java.util.*;
 
+/**
+ * This class defines an agent to control footmen in the given map configurations.
+ * @course EECS 391: Introduction to Artificial Intelligence
+ * @project PA4
+ * @author Timothy Sesler
+ * @author Adam Boe
+ * @date 23 April 2015
+ *
+ */
 public class RLAgent extends Agent {
 
     /**
@@ -21,6 +30,7 @@ public class RLAgent extends Agent {
      * and call sys.exit(0)
      */
     public final int numEpisodes;
+    public Map<Integer, Double> footmenIdRewardMap;	// Maps myFootmen ID to their total reward
 
     private List<Integer> myFootmen;	// Your footmen
     private List<Integer> enemyFootmen;	// Enemy's footmen
@@ -61,7 +71,8 @@ public class RLAgent extends Agent {
         if (args.length >= 1) {
             numEpisodes = Integer.parseInt(args[0]);
             System.out.println("Running " + numEpisodes + " episodes.");
-        } else {
+        } 
+        else {
             numEpisodes = 10;
             System.out.println("Warning! Number of episodes not specified. Defaulting to 10 episodes.");
         }
@@ -70,13 +81,15 @@ public class RLAgent extends Agent {
         
         if (args.length >= 2) {
             loadWeights = Boolean.parseBoolean(args[1]);
-        } else {
+        } 
+        else {
             System.out.println("Warning! Load weights argument not specified. Defaulting to not loading.");
         }
 
         if (loadWeights) {
             weights = loadWeights();
-        } else {
+        }
+        else {
             // initialize weights to random values between -1 and 1
             weights = new Double[NUM_FEATURES];
             for (int i = 0; i < weights.length; i++) {
@@ -93,7 +106,7 @@ public class RLAgent extends Agent {
 
         // You will need to add code to check if you are in a testing or learning episode
 
-        // Find all of your units
+        // Find all of your units.
         myFootmen = new LinkedList<>();
         
         for (Integer unitId : stateView.getUnitIds(playernum)) {
@@ -107,7 +120,7 @@ public class RLAgent extends Agent {
             }
         }
 
-        // Find all of the enemy units
+        // Find all of the enemy units.
         enemyFootmen = new LinkedList<>();
         
         for (Integer unitId : stateView.getUnitIds(ENEMY_PLAYERNUM)) {
@@ -119,6 +132,13 @@ public class RLAgent extends Agent {
             } else {
                 System.err.println("Unknown enemy unit type: " + unitName);
             }
+        }
+        
+        // Initialize all footmen with 0 initial reward.
+        footmenIdRewardMap = new HashMap<Integer, Double>();
+        
+        for (Integer id : myFootmen) {
+        	footmenIdRewardMap.put(id, 0.0);
         }
 
         return middleStep(stateView, historyView);
@@ -153,11 +173,33 @@ public class RLAgent extends Agent {
     @Override
     public Map<Integer, Action> middleStep(State.StateView stateView, History.HistoryView historyView) {
     	
+    	// Calculate each footman's reward at this state and add it to its total reward.
+    	for (Integer id : myFootmen) {
+    		// double currentReward =
+    		// double totalReward = 
+    	}
+    	
+    	// It is not the first turn.
     	if (stateView.getTurnNumber() > 0) {
     		
     		// Find and display any units that have been killed in the last turn.
     		for (DeathLog deathLog : historyView.getDeathLogs(stateView.getTurnNumber() - 1)) {
-    			System.out.println("Player: " + deathLog.getController() + " | Unit: " + deathLog.getDeadUnitID());
+    			Integer deadUnitID = deathLog.getDeadUnitID();
+    			System.out.println("Player: " + deathLog.getController() + " | Unit " + deadUnitID + " was killed.");
+    			
+    			// Remove any of the player's units that were killed in the last turn.
+    			if (myFootmen.contains(deadUnitID)) {
+    				myFootmen.remove(deadUnitID);
+    			}
+    			// Remove any of the enemy's units that were killed in the last turn.
+    			else if (enemyFootmen.contains(deadUnitID)) {
+    				enemyFootmen.remove(deadUnitID);
+    			}
+    			// An unidentified unit was killed and we don't know what to do with it.
+    			else {
+    				System.err.println("Unknown unit killed. Exiting...");
+    				System.exit(0);
+    			}    			
     		}
 
     		// Find and display the results of completed actions from the last turn.
@@ -215,12 +257,14 @@ public class RLAgent extends Agent {
 
     /**
      * Given the current state and the footman in question calculate the reward received on the last turn.
-     * This is where you will check for things like Did this footman take or give damage? Did this footman die
-     * or kill its enemy. Did this footman start an action on the last turn? See the assignment description
-     * for the full list of rewards.
+     * This is where you will check for things like:
+     * 		Did this footman take or give damage? 
+     * 		Did this footman die or kill its enemy. 
+     * 		Did this footman start an action on the last turn? 
+     * See the assignment description for the full list of rewards...
      *
-     * Remember that you will need to discount this reward based on the timestep it is received on. See
-     * the assignment description for more details.
+     * Remember that you will need to discount this reward based on the timestep it is received on. 
+     * See the assignment description for more details.
      *
      * As part of the reward you will need to calculate if any of the units have taken damage. You can use
      * the history view to get a list of damages dealt in the previous turn. Use something like the following.
@@ -264,10 +308,7 @@ public class RLAgent extends Agent {
      * @param defenderId An enemy footman that your footman would be attacking
      * @return The approximate Q-value
      */
-    public double calcQValue(State.StateView stateView,
-                             History.HistoryView historyView,
-                             int attackerId,
-                             int defenderId) {
+    public double calcQValue(State.StateView stateView, History.HistoryView historyView, int attackerId, int defenderId) {
         return 0;
     }
 
@@ -279,8 +320,7 @@ public class RLAgent extends Agent {
      * take a dot product of this array with the weights array to get a Q-value for a given state action.
      *
      * It is a good idea to make the first value in your array a constant. This just helps remove any offset
-     * from 0 in the Q-function. The other features are up to you. Many are suggested in the assignment
-     * description.
+     * from 0 in the Q-function. The other features are up to you. Many are suggested in the assignment description.
      *
      * @param stateView Current state of the SEPIA game
      * @param historyView History of the game up until this turn
@@ -288,11 +328,9 @@ public class RLAgent extends Agent {
      * @param defenderId An enemy footman. The one you are considering attacking.
      * @return The array of feature function outputs.
      */
-    public double[] calculateFeatureVector(State.StateView stateView,
-                                           History.HistoryView historyView,
-                                           int attackerId,
-                                           int defenderId) {
-        return null;
+    public double[] calculateFeatureVector(State.StateView stateView, History.HistoryView historyView, int attackerId, int defenderId) {
+        
+    	return null;
     }
 
     /**
@@ -324,7 +362,7 @@ public class RLAgent extends Agent {
      * DO NOT CHANGE THIS!
      *
      * This function will take your set of weights and save them to a file. Overwriting whatever file is
-     * currently there. You will use this when training your agents. You will include th output of this function
+     * currently there. You will use this when training your agents. You will include the output of this function
      * from your trained agent with your submission.
      *
      * Look in the agent_weights folder for the output.
