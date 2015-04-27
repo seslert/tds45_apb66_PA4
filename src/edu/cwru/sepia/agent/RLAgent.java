@@ -176,8 +176,8 @@ public class RLAgent extends Agent {
     @Override
     public Map<Integer, Action> middleStep(State.StateView stateView, History.HistoryView historyView) {
     	
+    	Map<Integer, Action> actionMap = new HashMap<Integer, Action>();
     	calculateFootmenRewards(stateView, historyView);	// Update the rewards for the new state.
-    	removeDeadUnits(stateView, historyView);
     	
     	if (significantEvent(stateView, historyView)) {
     		// Update the weights for each footman.
@@ -188,10 +188,12 @@ public class RLAgent extends Agent {
     							stateView, 
     							historyView, 
     							id);
-    			// Issue new actions.
+    			// Issue new actions if not the first turn.
+    	    	if (stateView.getTurnNumber() > 0) {
+    	    		actionMap.put(id, Action.createCompoundAttack(id, selectAction(stateView, historyView, id)));
+    	    	}
     		}
     	}
-    	
     	// It's not the first turn.
     	if (stateView.getTurnNumber() > 0) {
     		removeDeadUnits(stateView, historyView);	// Remove any units that were killed in the last turn.
@@ -202,7 +204,7 @@ public class RLAgent extends Agent {
     		}
     	}
     	
-        return null;
+        return actionMap;
     }
 
     /**
@@ -463,7 +465,7 @@ public class RLAgent extends Agent {
     	featureVector[0] = 0.5;
     	
     	// Is the enemy the closest to attacker by Chebyshev distance?
-    	featureVector[1] = getChebyshevDistance(attacker.getXPosition(), 
+    	featureVector[1] = 1 / getChebyshevDistance(attacker.getXPosition(), 
     											attacker.getYPosition(), 
     											defender.getXPosition(), 
     											defender.getYPosition());
