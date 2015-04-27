@@ -314,12 +314,12 @@ public class RLAgent extends Agent {
     	    		 			+ " attacking player: " + damageLog.getAttackerController() 
     	    		 			+ "attacking unit: " + damageLog.getAttackerID());
     	     
-    	     // An enemy footman was attacked.
-    	     if (damageLog.getDefenderController() == ENEMY_PLAYERNUM) {
+    	     // This footman attacked an enemy.
+    	     if (damageLog.getAttackerID() == footmanId) {
     	    	reward += damageLog.getDamage();
     	     }
-    	     // One of our footmen was attacked.
-    	     else if (damageLog.getAttackerController() == ENEMY_PLAYERNUM) {
+    	     // This footman was attacked.
+    	     else if (damageLog.getDefenderController() == footmanId) {
     	    	 reward -= damageLog.getDamage(); 
     	     }
     	}
@@ -329,15 +329,26 @@ public class RLAgent extends Agent {
     	 * If a friendly footman gets killed -100 penalty
     	 */
     	for (DeathLog deathLog : historyView.getDeathLogs(lastTurnNumber)) {
+    		int controllerID = deathLog.getController();
     		Integer deadUnitID = deathLog.getDeadUnitID();
     		
-    		// One of our footmen was killed last turn.
-    		if (myFootmen.contains(deadUnitID)) {
-    			reward -= 100;
+    		// An enemy unit was killed in the last turn.
+    		if (controllerID == ENEMY_PLAYERNUM) {
+    			// We need to check if this footman performed an attack action last turn and
+    			// if it actually killed the enemy identified in the log.
+    			Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, lastTurnNumber);
+    			
+    			for (ActionResult ar : actionResults.values()) {
+    				
+    				// This footman performed the action and the target was the dead unit.
+    				if (ar.getAction().getUnitId() == footmanId && ((TargetedAction)ar.getAction()).getTargetId() == deadUnitID) {
+    					reward += 100;
+    				}
+    			}
     		}
-    		// An enemy footman was killed last turn.
-    		else if (enemyFootmen.contains(deadUnitID)) {
-    			reward += 100;
+    		// This footman was killed last turn.
+    		else if (footmanId == deadUnitID) {
+    			reward -= 100;
     		}
     	}
     	
@@ -345,7 +356,14 @@ public class RLAgent extends Agent {
     	Map<Integer, Action> commandsIssued = historyView.getCommandsIssued(playernum, lastTurnNumber);
     	
     	for (Map.Entry<Integer, Action> commandEntry : commandsIssued.entrySet()) {
-        	System.out.println("Unit " + commandEntry.getKey() + " was command to " + commandEntry.getValue().toString());
+        	System.out.println("Unit " + commandEntry.getKey() + " was commanded to " + commandEntry.getValue().toString());
+        	
+        	// This footman received a command last turn.
+        	if (commandEntry.getKey() == footmanId) {
+        		reward -= 0.1;
+        	}
+        	
+        	// TODO: May need to check if the command is the same as the command issued from two previous turns...
         }
     	
         return reward;
