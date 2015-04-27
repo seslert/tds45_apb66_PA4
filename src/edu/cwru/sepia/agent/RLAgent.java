@@ -47,7 +47,7 @@ public class RLAgent extends Agent {
     /**
      * Set this to whatever size your feature vector is.
      */
-    public static final int NUM_FEATURES = 3;
+    public static final int NUM_FEATURES = 4;
 
     /** Use this random number generator for your epsilon exploration. When you submit we will
      * change this seed so make sure that your agent works for more than the default seed.
@@ -264,9 +264,34 @@ public class RLAgent extends Agent {
      * @return The enemy footman ID this unit should attack
      */
     public int selectAction(State.StateView stateView, History.HistoryView historyView, int attackerId) {
-    	// TODO: Implement
-    	
-        return -1;
+    	// There are still enemies to attack.
+    	if (enemyFootmen.size() > 0) {
+    		// We are not evaluating and want to start epsilon-greedy action selection.
+    		if (!freezeForEvaluation && random.nextDouble() < epsilon) {
+    			// Return a randomly selected enemy to attack.
+    			return enemyFootmen.get((int)random.nextDouble() * enemyFootmen.size());
+    		}
+    		// Choose the action that maximizes the Q value.
+    		else {
+    			int selectedEnemyId = enemyFootmen.get(0);
+    			double maxQValue = calcQValue(stateView, historyView, attackerId, selectedEnemyId);
+    				
+    			// Loop through all enemies and choose the one that maximizes the Q Value.
+    			for (int i = 0; i < enemyFootmen.size(); i++) {
+    				int tempEnemyId = enemyFootmen.get(i);
+    				double tempQValue = calcQValue(stateView, historyView, attackerId, tempEnemyId);
+    				
+    				if (tempQValue > maxQValue) {
+    					maxQValue = tempQValue;
+    					selectedEnemyId = tempEnemyId;
+    				}
+    			}
+    			// Return the selected ID.
+    			return selectedEnemyId;
+    		}
+    	}
+    	// We're out of enemies to attack.
+    	return -1;
     }
 
     /**
@@ -307,14 +332,12 @@ public class RLAgent extends Agent {
     public double calculateReward(State.StateView stateView, History.HistoryView historyView, int footmanId) {
     	
     	double reward = 0.0;
-    	
-    	// Check if it's the first turn and return.
-    	if (stateView.getTurnNumber() == 0) return reward;
-    	
     	int lastTurnNumber = stateView.getTurnNumber() - 1;
     	
-    	/*
-    	 *  Check for dealt/received damage.
+    	// Check if it's the first turn and return.
+    	if (lastTurnNumber < 0) return reward;    	
+    	
+    	/*	Check for dealt/received damage.
     	 *  If a friendly footman hits an enemy for d damage it gets +d reward
     	 *  If a friendly footman gets hit for d damage it gets -d penalty    
     	 */
@@ -400,9 +423,7 @@ public class RLAgent extends Agent {
     	double[] featureVector = calculateFeatureVector(stateView, historyView, attackerId, defenderId);
     	
     	// Exit if these vectors are not the same length.
-    	if (weights.length != featureVector.length) {
-    		System.exit(0);
-    	}
+    	if (weights.length != featureVector.length) System.exit(0);
     	
     	// Calculate the dot product of the weight vector and the feature vector.
     	double dotProduct = 0;
@@ -412,7 +433,7 @@ public class RLAgent extends Agent {
     	}
     	
     	// Return the Q value
-    	return dotProduct + 0;	// TODO: 0 should be replaced by w0...? 	
+    	return dotProduct + weights[0];	// TODO: Not sure if adding weights[0] is right... 	
     }
 
     /**
@@ -434,6 +455,7 @@ public class RLAgent extends Agent {
     public double[] calculateFeatureVector(State.StateView stateView, History.HistoryView historyView, int attackerId, int defenderId) {
         
     	double[] featureVector = new double[NUM_FEATURES];
+    	int lastTurnNumber = stateView.getTurnNumber() - 1;
     	UnitView attacker = stateView.getUnit(attackerId);
     	UnitView defender = stateView.getUnit(defenderId);    	    	
     	
@@ -445,15 +467,30 @@ public class RLAgent extends Agent {
     											attacker.getYPosition(), 
     											defender.getXPosition(), 
     											defender.getYPosition());
-    	
-    	// TODO: Finalize the features...
-    	
-    	// Is the enemy being attacked by multiple footmen already?
-    	
-    	// Avoid enemies with higher health unless they are being attacked by allies...?
-    	featureVector[2] = defender.getHP() > 0 ? attacker.getHP() / defender.getHP() : 1;
     
+    	// Avoid enemies with higher health.
+    	featureVector[2] = defender.getHP() > 0 ? attacker.getHP() / defender.getHP() : 1;
+    	
     	// Is this enemy currently attacking me (the footman)?
+    	Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, lastTurnNumber);
+    	
+    	if (((TargetedAction)actionResults.get(defenderId).getAction()).getTargetId() == attackerId) {
+    		featureVector[3] = 10;	// TODO: Not really sure what should be assigned here...
+    	}
+    	else {
+    		featureVector[3] = 1;
+    	}
+    	
+    	// Is the enemy being attacked by at least one other footman already?
+    	// TODO: Finish this
+    	int numAttackers = 0;
+    	
+    	for (ActionResult ar : actionResults.values()) {
+    		if (((TargetedAction)ar.getAction()).getTargetId() == defenderId) {
+    			numAttackers++;
+    		}
+    	}
+    	featureVector[4] = numAttackers > 0 ? (double)(1 / numAttackers) : 1;
     	
     	return featureVector;
     }
