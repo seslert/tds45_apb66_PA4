@@ -46,7 +46,7 @@ public class RLAgent extends Agent {
     /**
      * Set this to whatever size your feature vector is.
      */
-    public static final int NUM_FEATURES = 5;
+    public static final int NUM_FEATURES = 3;
 
     /** Use this random number generator for your epsilon exploration. When you submit we will
      * change this seed so make sure that your agent works for more than the default seed.
@@ -177,8 +177,8 @@ public class RLAgent extends Agent {
     	
     	// Calculate each footman's reward at this state and add it to its total reward.
     	for (Integer id : myFootmen) {
-    		// double currentReward =
-    		// double totalReward = 
+    		// double stateReward =
+    		double currentTotalReward = footmenIdRewardMap.get(id); 
     	}
     	
     	// It is not the first turn.
@@ -254,6 +254,8 @@ public class RLAgent extends Agent {
      * @return The enemy footman ID this unit should attack
      */
     public int selectAction(State.StateView stateView, History.HistoryView historyView, int attackerId) {
+    	
+    	
         return -1;
     }
 
@@ -293,7 +295,60 @@ public class RLAgent extends Agent {
      * @return The current reward
      */
     public double calculateReward(State.StateView stateView, History.HistoryView historyView, int footmanId) {
-        return 0;
+    	
+    	double reward = 0.0;
+    	
+    	// Check if it's the first turn and return.
+    	if (stateView.getTurnNumber() == 0) { return reward; }
+    	
+    	int lastTurnNumber = stateView.getTurnNumber() - 1;
+    	
+    	/*
+    	 *  Check for units that received damage.
+    	 *  If a friendly footman hits an enemy for d damage it gets +d reward
+    	 *  If a friendly footman gets hit for d damage it gets -d penalty    
+    	 */
+    	for(DamageLog damageLog : historyView.getDamageLogs(lastTurnNumber)) {
+    	     System.out.println("Defending player: " + damageLog.getDefenderController() 
+    	    		 			+ " defending unit: " + damageLog.getDefenderID() 
+    	    		 			+ " attacking player: " + damageLog.getAttackerController() 
+    	    		 			+ "attacking unit: " + damageLog.getAttackerID());
+    	     
+    	     // An enemy footman was attacked.
+    	     if (damageLog.getDefenderController() == ENEMY_PLAYERNUM) {
+    	    	reward += damageLog.getDamage();
+    	     }
+    	     // One of our footmen was attacked.
+    	     else if (damageLog.getAttackerController() == ENEMY_PLAYERNUM) {
+    	    	 reward -= damageLog.getDamage(); 
+    	     }
+    	}
+    	
+    	/* Check for units that were killed.
+    	 * If an enemy footman is killed +100 reward
+    	 * If a friendly footman gets killed -100 penalty
+    	 */
+    	for (DeathLog deathLog : historyView.getDeathLogs(lastTurnNumber)) {
+    		Integer deadUnitID = deathLog.getDeadUnitID();
+    		
+    		// One of our footmen was killed last turn.
+    		if (myFootmen.contains(deadUnitID)) {
+    			reward -= 100;
+    		}
+    		// An enemy footman was killed last turn.
+    		else if (enemyFootmen.contains(deadUnitID)) {
+    			reward += 100;
+    		}
+    	}
+    	
+    	// Each action costs the agent -0.1	
+    	Map<Integer, Action> commandsIssued = historyView.getCommandsIssued(playernum, lastTurnNumber);
+    	
+    	for (Map.Entry<Integer, Action> commandEntry : commandsIssued.entrySet()) {
+        	System.out.println("Unit " + commandEntry.getKey() + " was command to " + commandEntry.getValue().toString());
+        }
+    	
+        return reward;
     }
 
     /**
@@ -311,7 +366,23 @@ public class RLAgent extends Agent {
      * @return The approximate Q-value
      */
     public double calcQValue(State.StateView stateView, History.HistoryView historyView, int attackerId, int defenderId) {
-        return 0;
+    	
+    	double[] featureVector = calculateFeatureVector(stateView, historyView, attackerId, defenderId);
+    	
+    	// Exit if these vectors are not the same length
+    	if (weights.length != featureVector.length) {
+    		System.exit(0);
+    	}
+    	
+    	// Calculate the dot product of the weight vector and the feature vector
+    	double dotProduct = 0;
+    	
+    	for (int i = 0; i < featureVector.length; i++) {
+    		dotProduct += featureVector[i] * weights[i];
+    	}
+    	
+    	// Return the Q value
+    	return dotProduct + 0;	// TODO: 0 should be replaced by w0    	
     }
 
     /**
