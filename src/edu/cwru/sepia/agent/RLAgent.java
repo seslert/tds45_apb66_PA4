@@ -47,7 +47,7 @@ public class RLAgent extends Agent {
     /**
      * Set this to whatever size your feature vector is.
      */
-    public static final int NUM_FEATURES = 4;
+    public static final int NUM_FEATURES = 5;
 
     /** Use this random number generator for your epsilon exploration. When you submit we will
      * change this seed so make sure that your agent works for more than the default seed.
@@ -182,16 +182,14 @@ public class RLAgent extends Agent {
     	if (significantEvent(stateView, historyView)) {
     		// Update the weights for each footman.
     		for (Integer id : myFootmen) {
-    			updateWeights(	this.weights, 
-    							this.featureVector, 
-    							footmenRewardMap.get(id), 
-    							stateView, 
-    							historyView, 
-    							id);
-    			// Issue new actions if not the first turn.
-    	    	if (stateView.getTurnNumber() > 0) {
-    	    		actionMap.put(id, Action.createCompoundAttack(id, selectAction(stateView, historyView, id)));
-    	    	}
+//    			updateWeights(	this.weights, 
+//    							this.featureVector, 
+//    							footmenRewardMap.get(id), 
+//    							stateView, 
+//    							historyView, 
+//    							id);
+    			// Issue new actions.
+    	    	actionMap.put(id, Action.createCompoundAttack(id, selectAction(stateView, historyView, id)));    	    	
     		}
     	}
     	// It's not the first turn.
@@ -266,10 +264,12 @@ public class RLAgent extends Agent {
      * @return The enemy footman ID this unit should attack
      */
     public int selectAction(State.StateView stateView, History.HistoryView historyView, int attackerId) {
+    	
+    	int lastTurnNumber = stateView.getTurnNumber() - 1;
     	// There are still enemies to attack.
     	if (enemyFootmen.size() > 0) {
     		// We are not evaluating and want to start epsilon-greedy action selection.
-    		if (!freezeForEvaluation && random.nextDouble() < epsilon) {
+    		if (lastTurnNumber < 0 || !freezeForEvaluation && random.nextDouble() < epsilon) {
     			// Return a randomly selected enemy to attack.
     			return enemyFootmen.get((int)random.nextDouble() * enemyFootmen.size());
     		}
@@ -464,35 +464,54 @@ public class RLAgent extends Agent {
     	// Set the initial feature to a constant as suggested in assignment.
     	featureVector[0] = 0.5;
     	
-    	// Is the enemy the closest to attacker by Chebyshev distance?
-    	featureVector[1] = 1 / getChebyshevDistance(attacker.getXPosition(), 
-    											attacker.getYPosition(), 
-    											defender.getXPosition(), 
-    											defender.getYPosition());
-    
-    	// Avoid enemies with higher health.
-    	featureVector[2] = defender.getHP() > 0 ? attacker.getHP() / defender.getHP() : 1;
-    	
-    	// Is this enemy currently attacking me (the footman)?
-    	Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, lastTurnNumber);
-    	
-    	if (((TargetedAction)actionResults.get(defenderId).getAction()).getTargetId() == attackerId) {
-    		featureVector[3] = 10;	// TODO: Not really sure what should be assigned here...
+    	if (attacker != null && defender != null) {
+        	// Is the enemy the closest to attacker by Chebyshev distance?
+    		featureVector[1] = (1 / getChebyshevDistance(attacker.getXPosition(), 
+					attacker.getYPosition(), 
+					defender.getXPosition(), 
+					defender.getYPosition())) * 100;
+    		
+        	// Avoid enemies with higher health.
+        	featureVector[2] = defender.getHP() > 0 ? attacker.getHP() / defender.getHP() : 1;
+        	
+        	// Is this enemy currently attacking me (the footman)?
+        	Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, lastTurnNumber);
+        	
+        	// There were action results from the previous turn.
+        	if (actionResults != null) {
+        		
+        		// One of the actions had to do with the defender.
+        		if (actionResults.containsKey(defenderId)) {
+        			TargetedAction targetedAction = (TargetedAction)actionResults.get(defenderId).getAction();
+        			
+        			if (targetedAction != null && targetedAction.getTargetId() == attackerId) {
+            			featureVector[3] = 100;	// TODO: Not really sure what should be assigned here...
+            		}
+            		else {
+                		featureVector[3] = 1;
+                	}
+        		}
+        		else {
+            		featureVector[3] = 1;
+            	}
+        		
+        		// Is the enemy being attacked by at least one other footman already?
+            	int numAttackers = 0;
+            	
+            	for (ActionResult ar : actionResults.values()) {
+            		if (((TargetedAction)ar.getAction()).getTargetId() == defenderId) {
+            			numAttackers++;
+            		}
+            	}
+            	featureVector[4] = numAttackers > 0 ? (double)(1 / numAttackers) : 1;
+        	}
     	}
     	else {
-    		featureVector[3] = 1;
+    		featureVector[1] = 0;
+    		featureVector[2] = 0;
+    		featureVector[3] = 0;
+    		featureVector[4] = 0;
     	}
-    	
-    	// Is the enemy being attacked by at least one other footman already?
-    	// TODO: Finish this
-    	int numAttackers = 0;
-    	
-    	for (ActionResult ar : actionResults.values()) {
-    		if (((TargetedAction)ar.getAction()).getTargetId() == defenderId) {
-    			numAttackers++;
-    		}
-    	}
-    	featureVector[4] = numAttackers > 0 ? (double)(1 / numAttackers) : 1;
     	
     	return featureVector;
     }
@@ -501,20 +520,33 @@ public class RLAgent extends Agent {
      * Determines whether a significant event has occurred in the game.
      * @return
      */
-    private boolean significantEvent(State.StateView stateView, History.HistoryView historyView) {
+    private boolean significantEvent(State.StateView stateView, History.HistoryView historyView) {    	
+    	
     	int lastTurnNumber = stateView.getTurnNumber() - 1;
+    	
+    	// TODO: Remove
+    	System.out.println("Checking for events on turn: " + lastTurnNumber);
     	
     	// First turn
     	if (lastTurnNumber < 0) {
+        	// TODO: Remove
+        	System.out.println("EVENT: First Turn");
+    		
     		return true;
     	}
     	// Any footman killed
     	if (historyView.getDeathLogs(lastTurnNumber).size() > 0) {
+        	// TODO: Remove
+        	System.out.println("EVENT: Footman killed");
+    		
     		return true;
     	}
     	// Friendly footman attacked
     	for (DamageLog damageLog : historyView.getDamageLogs(lastTurnNumber)) {
     		if (myFootmen.contains(damageLog.getDefenderID())) {
+            	// TODO: Remove
+            	System.out.println("EVENT: Allied footman attacked");
+    			
     			return true;
     		}
     	}
@@ -522,6 +554,9 @@ public class RLAgent extends Agent {
     	// Footman action completed
     	for (ActionResult ar : actionResults.values()) {
     		if (ar.getFeedback().toString().equals("INCOMPLETE")) {
+            	// TODO: Remove
+            	System.out.println("EVENT: Action completed");
+    			
     			return true;
     		}
     	}
