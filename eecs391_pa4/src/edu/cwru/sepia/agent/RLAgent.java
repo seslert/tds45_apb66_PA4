@@ -32,7 +32,7 @@ public class RLAgent extends Agent {
      * and call sys.exit(0)
      */
     public final int numEpisodes;
-    public Map<Integer, Double> footmenIdRewardMap;	// Maps myFootmen ID to their total reward
+    public Map<Integer, Double> footmenRewardMap;	// Maps myFootmen ID to their total reward
 
     private List<Integer> myFootmen;	// Your footmen
     private List<Integer> enemyFootmen;	// Enemy's footmen
@@ -117,7 +117,8 @@ public class RLAgent extends Agent {
             
             if (unitName.equals("footman")) {
                 myFootmen.add(unitId);
-            } else {
+            } 
+            else {
                 System.err.println("Unknown player unit type: " + unitName);
             }
         }
@@ -131,16 +132,17 @@ public class RLAgent extends Agent {
             
             if (unitName.equals("footman")) {
                 enemyFootmen.add(unitId);
-            } else {
+            } 
+            else {
                 System.err.println("Unknown enemy unit type: " + unitName);
             }
         }
         
         // Initialize all footmen with 0 initial reward.
-        footmenIdRewardMap = new HashMap<Integer, Double>();
+        footmenRewardMap = new HashMap<Integer, Double>();
         
         for (Integer id : myFootmen) {
-        	footmenIdRewardMap.put(id, 0.0);
+        	footmenRewardMap.put(id, 0.0);
         }
 
         return middleStep(stateView, historyView);
@@ -161,7 +163,7 @@ public class RLAgent extends Agent {
      *
      * You should also check for completed actions using the history view. Obviously you never want a footman just
      * sitting around doing nothing (the enemy certainly isn't going to stop attacking). So at the minimum you will
-     * have an even whenever one your footmen's targets is killed or an action fails. Actions may fail if the target
+     * have an event whenever one your footmen's targets is killed or an action fails. Actions may fail if the target
      * is surrounded or the unit cannot find a path to the unit. To get the action results from the previous turn
      * you can do something similar to the following. Please be aware that on the first turn you should not call this
      *
@@ -175,36 +177,11 @@ public class RLAgent extends Agent {
     @Override
     public Map<Integer, Action> middleStep(State.StateView stateView, History.HistoryView historyView) {
     	
-    	// Calculate each footman's reward at this state and add it to its total reward.
-    	for (Integer id : myFootmen) {
-    		// double stateReward =
-    		double currentTotalReward = footmenIdRewardMap.get(id); 
-    	}
+    	calculateFootmenRewards(stateView, historyView);	// Update the rewards for the new state.
     	
-    	// It is not the first turn.
+    	// It's not the first turn.
     	if (stateView.getTurnNumber() > 0) {
-    		
-    		// Find and display any units that have been killed in the last turn.
-    		for (DeathLog deathLog : historyView.getDeathLogs(stateView.getTurnNumber() - 1)) {
-    			Integer deadUnitID = deathLog.getDeadUnitID();
-    			System.out.println("Player: " + deathLog.getController() + " | Unit " + deadUnitID + " was killed.");
-    			
-    			// Remove any of the player's units that were killed in the last turn.
-    			if (myFootmen.contains(deadUnitID)) {
-    				myFootmen.remove(deadUnitID);
-    			}
-    			// Remove any of the enemy's units that were killed in the last turn.
-    			else if (enemyFootmen.contains(deadUnitID)) {
-    				enemyFootmen.remove(deadUnitID);
-    			}
-    			// An unidentified unit was killed and we don't know what to do with it.
-    			else {
-    				System.err.println("Unknown unit killed. Exiting with failure...");
-    				System.exit(0);
-    			}
-    		}
-
-    		// Find and display the results of completed actions from the last turn.
+    		removeDeadUnits(stateView, historyView);	// Remove any units that were killed in the last turn.
         	Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, stateView.getTurnNumber() - 1);
         	
     		for (ActionResult result : actionResults.values()) {
@@ -241,7 +218,16 @@ public class RLAgent extends Agent {
      * @return The updated weight vector.
      */
     public double[] updateWeights(double[] oldWeights, double[] oldFeatures, double totalReward, State.StateView stateView, History.HistoryView historyView, int footmanId) {
-        return null;
+        
+    	double[] updatedWeights = new double[oldWeights.length];
+    	
+    	for (int i = 0; i < oldWeights.length; i++) {
+    		// Modify updatedWeights[i]
+    		
+    		// q(s,a) = q(s,a) + learningrate * (reward + discountfactor * q'(s,a) - q(s,a)) ???
+    	}
+    	
+    	return updatedWeights;
     }
 
     /**
@@ -299,12 +285,12 @@ public class RLAgent extends Agent {
     	double reward = 0.0;
     	
     	// Check if it's the first turn and return.
-    	if (stateView.getTurnNumber() == 0) { return reward; }
+    	if (stateView.getTurnNumber() == 0) return reward;
     	
     	int lastTurnNumber = stateView.getTurnNumber() - 1;
     	
     	/*
-    	 *  Check for units that received damage.
+    	 *  Check for dealt/received damage.
     	 *  If a friendly footman hits an enemy for d damage it gets +d reward
     	 *  If a friendly footman gets hit for d damage it gets -d penalty    
     	 */
@@ -346,7 +332,7 @@ public class RLAgent extends Agent {
     				}
     			}
     		}
-    		// This footman was killed last turn.
+    		// This footman was killed in the last turn.
     		else if (footmanId == deadUnitID) {
     			reward -= 100;
     		}
@@ -359,11 +345,10 @@ public class RLAgent extends Agent {
         	System.out.println("Unit " + commandEntry.getKey() + " was commanded to " + commandEntry.getValue().toString());
         	
         	// This footman received a command last turn.
+        	// TODO: May need to check if the command is the same as the command issued from two previous turns...
         	if (commandEntry.getKey() == footmanId) {
         		reward -= 0.1;
         	}
-        	
-        	// TODO: May need to check if the command is the same as the command issued from two previous turns...
         }
     	
         return reward;
@@ -387,12 +372,12 @@ public class RLAgent extends Agent {
     	
     	double[] featureVector = calculateFeatureVector(stateView, historyView, attackerId, defenderId);
     	
-    	// Exit if these vectors are not the same length
+    	// Exit if these vectors are not the same length.
     	if (weights.length != featureVector.length) {
     		System.exit(0);
     	}
     	
-    	// Calculate the dot product of the weight vector and the feature vector
+    	// Calculate the dot product of the weight vector and the feature vector.
     	double dotProduct = 0;
     	
     	for (int i = 0; i < featureVector.length; i++) {
@@ -434,9 +419,10 @@ public class RLAgent extends Agent {
     											defender.getXPosition(), 
     											defender.getYPosition());
     	
+    	// TODO: Finalize the features...
     	// Is the enemy being attacked by multiple footmen already?
     	
-    	// Avoid enemies with higher health unless they are being attacked by allies...
+    	// Avoid enemies with higher health unless they are being attacked by allies...?
     	featureVector[2] = defender.getHP() > 0 ? attacker.getHP() / defender.getHP() : 1;
     
     	// Is this enemy currently attacking me (the footman)?
@@ -445,17 +431,64 @@ public class RLAgent extends Agent {
     }
     
     /**
-     * Calculates the Chebyshev distance between two coordinates.
+     * Helper method that calculates and updates the rewards for all footmen for a given StateView and HistoryView.
+     * @param stateView
+     * @param historyView
+     */
+    private void calculateFootmenRewards(State.StateView stateView, History.HistoryView historyView) {
+    	    	
+    	for (Integer id : myFootmen) {
+    		double stateReward = calculateReward(stateView, historyView, id);
+    		double currentTotalReward = footmenRewardMap.get(id); 
+    		footmenRewardMap.put(id, currentTotalReward + stateReward);
+    	}
+    }
+    
+    /**
+     * Helper method that removes any units killed in the last turn. 
+     * @param stateView
+     * @param historyView
+     */
+    private void removeDeadUnits(State.StateView stateView, History.HistoryView historyView) {
+    	
+    	for (DeathLog deathLog : historyView.getDeathLogs(stateView.getTurnNumber() - 1)) {
+			Integer deadUnitID = deathLog.getDeadUnitID();
+			System.out.println("Player: " + deathLog.getController() + " | Unit " + deadUnitID + " was killed.");
+			
+			// Remove any of the player's units that were killed in the last turn.
+			if (myFootmen.contains(deadUnitID)) {
+				myFootmen.remove(deadUnitID);
+			}
+			// Remove any of the enemy's units that were killed in the last turn.
+			else if (enemyFootmen.contains(deadUnitID)) {
+				enemyFootmen.remove(deadUnitID);
+			}
+			// An unidentified unit was killed and we don't know what to do with it.
+			else {
+				System.err.println("Unknown unit killed. Exiting with failure...");
+				System.exit(0);
+			}
+		}
+    }
+    
+    /**
+     * Calculates the Chebyshev distance between two coordinates (x1, y1), (x2, y2).
      * @param x1
      * @param y1
      * @param x2
      * @param y2
      * @return
      */
-    public double getChebyshevDistance(int x1, int y1, int x2, int y2) {
+    private double getChebyshevDistance(int x1, int y1, int x2, int y2) {
     	
     	return Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
     }
+    
+    /*
+     * ///////////////////////////////////////////////////////////////////////////////////////
+     * DON'T MODIFY ANTHING BEYOND THIS POINT.
+     * ///////////////////////////////////////////////////////////////////////////////////////
+     */
 
     /**
      * DO NOT CHANGE THIS!
