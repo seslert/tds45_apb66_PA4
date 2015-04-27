@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
-	<classpathentry kind="src" path="eecs391_pa4/src"/>
+	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="lib/Sepia.jar"/>
+	<classpathentry kind="lib" path="combat_agent/combatAgent.class"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

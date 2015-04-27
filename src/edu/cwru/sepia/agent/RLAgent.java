@@ -36,6 +36,7 @@ public class RLAgent extends Agent {
 
     private List<Integer> myFootmen;	// Your footmen
     private List<Integer> enemyFootmen;	// Enemy's footmen
+    private boolean freezeForEvaluation;
 
     /**
      * Convenience variable specifying enemy agent number. Use this whenever referring
@@ -53,10 +54,8 @@ public class RLAgent extends Agent {
      */
     public final Random random = new Random(12345);
 
-    /**
-     * Your Q-function weights.
-     */
-    public Double[] weights;
+    public Double[] weights;	// Your Q-function weights.
+    public Double[] featureVector;	// Old feature vector.
 
     /**
      * These variables are set for you according to the assignment definition. You can change them,
@@ -178,16 +177,31 @@ public class RLAgent extends Agent {
     public Map<Integer, Action> middleStep(State.StateView stateView, History.HistoryView historyView) {
     	
     	calculateFootmenRewards(stateView, historyView);	// Update the rewards for the new state.
+    	removeDeadUnits(stateView, historyView);
+    	
+    	if (significantEvent(stateView, historyView)) {
+    		// Update the weights for each footman.
+    		for (Integer id : myFootmen) {
+    			updateWeights(	this.weights, 
+    							this.featureVector, 
+    							footmenRewardMap.get(id), 
+    							stateView, 
+    							historyView, 
+    							id);
+    			// Issue new actions.
+    		}
+    	}
     	
     	// It's not the first turn.
     	if (stateView.getTurnNumber() > 0) {
     		removeDeadUnits(stateView, historyView);	// Remove any units that were killed in the last turn.
         	Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, stateView.getTurnNumber() - 1);
         	
-    		for (ActionResult result : actionResults.values()) {
-    			System.out.println(result.toString());
+    		for (ActionResult ar : actionResults.values()) {
+    			System.out.println(ar.toString());
     		}
     	}
+    	
         return null;
     }
 
@@ -199,40 +213,50 @@ public class RLAgent extends Agent {
      */
     @Override
     public void terminalStep(State.StateView stateView, History.HistoryView historyView) {
+    	
+    	// Last step updates/cleanup
+    	calculateFootmenRewards(stateView, historyView);
+    	removeDeadUnits(stateView, historyView);
+    	
+    	if (myFootmen.size() > 0) {
+    		// We win!
+    	}
+    	else if (enemyFootmen.size() > 0) {
+    		// We lose!
+    	}
 
         // MAKE SURE YOU CALL printTestData after you finish a test episode.
 
         // Save your weights
         saveWeights(weights);
-
     }
 
     /**
      * Calculate the updated weights for this agent. 
-     * @param oldWeights Weights prior to update
-     * @param oldFeatures Features from (s,a)
+     * @param weights2 Weights prior to update
+     * @param featureVector2 Features from (s,a)
      * @param totalReward Cumulative discounted reward for this footman.
      * @param stateView Current state of the game.
      * @param historyView History of the game up until this point
      * @param footmanId The footman we are updating the weights for
      * @return The updated weight vector.
      */
-    public double[] updateWeights(double[] oldWeights, double[] oldFeatures, double totalReward, State.StateView stateView, History.HistoryView historyView, int footmanId) {
-        
-    	double[] updatedWeights = new double[oldWeights.length];
+    public double[] updateWeights(Double[] weights2, Double[] featureVector2, Double totalReward, State.StateView stateView, History.HistoryView historyView, int footmanId) {
+        // TODO: FINISH
+    	double[] updatedWeights = new double[weights2.length];
     	
-    	for (int i = 0; i < oldWeights.length; i++) {
+    	for (int i = 0; i < weights2.length; i++) {
     		// Modify updatedWeights[i]
     		
-    		// q(s,a) = q(s,a) + learningrate * (reward + discountfactor * q'(s,a) - q(s,a)) ???
+    		// wi = wi - [learningrate(-R(s, a) + gamma * max a'[q'(s,a) - q(s,a)])f(s, a)]
     	}
     	
     	return updatedWeights;
     }
 
     /**
-     * Given a footman and the current state and history of the game select the enemy that this unit should
-     * attack. This is where you would do the epsilon-greedy action selection.
+     * Given a footman and the current state and history of the game select the enemy that 
+     * this unit should attack. This is where you would do the epsilon-greedy action selection.
      *
      * @param stateView Current state of the game
      * @param historyView The entire history of this episode
@@ -240,7 +264,7 @@ public class RLAgent extends Agent {
      * @return The enemy footman ID this unit should attack
      */
     public int selectAction(State.StateView stateView, History.HistoryView historyView, int attackerId) {
-    	
+    	// TODO: Implement
     	
         return -1;
     }
@@ -295,6 +319,7 @@ public class RLAgent extends Agent {
     	 *  If a friendly footman gets hit for d damage it gets -d penalty    
     	 */
     	for(DamageLog damageLog : historyView.getDamageLogs(lastTurnNumber)) {
+    		// TODO: Remove print statement.
     	     System.out.println("Defending player: " + damageLog.getDefenderController() 
     	    		 			+ " defending unit: " + damageLog.getDefenderID() 
     	    		 			+ " attacking player: " + damageLog.getAttackerController() 
@@ -320,10 +345,12 @@ public class RLAgent extends Agent {
     		
     		// An enemy unit was killed in the last turn.
     		if (controllerID == ENEMY_PLAYERNUM) {
-    			// We need to check if this footman performed an attack action last turn and
-    			// if it actually killed the enemy identified in the log.
     			Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, lastTurnNumber);
     			
+    			/*
+    			 * We need to check if this footman performed an attack action last 
+    			 * turn and if it actually killed the enemy identified by deathLog.
+    			 */
     			for (ActionResult ar : actionResults.values()) {
     				
     				// This footman performed the action and the target was the dead unit.
@@ -385,7 +412,7 @@ public class RLAgent extends Agent {
     	}
     	
     	// Return the Q value
-    	return dotProduct + 0;	// TODO: 0 should be replaced by w0    	
+    	return dotProduct + 0;	// TODO: 0 should be replaced by w0...? 	
     }
 
     /**
@@ -420,6 +447,7 @@ public class RLAgent extends Agent {
     											defender.getYPosition());
     	
     	// TODO: Finalize the features...
+    	
     	// Is the enemy being attacked by multiple footmen already?
     	
     	// Avoid enemies with higher health unless they are being attacked by allies...?
@@ -428,6 +456,38 @@ public class RLAgent extends Agent {
     	// Is this enemy currently attacking me (the footman)?
     	
     	return featureVector;
+    }
+    
+    /**
+     * Determines whether a significant event has occurred in the game.
+     * @return
+     */
+    private boolean significantEvent(State.StateView stateView, History.HistoryView historyView) {
+    	int lastTurnNumber = stateView.getTurnNumber() - 1;
+    	
+    	// First turn
+    	if (lastTurnNumber < 0) {
+    		return true;
+    	}
+    	// Any footman killed
+    	if (historyView.getDeathLogs(lastTurnNumber).size() > 0) {
+    		return true;
+    	}
+    	// Friendly footman attacked
+    	for (DamageLog damageLog : historyView.getDamageLogs(lastTurnNumber)) {
+    		if (myFootmen.contains(damageLog.getDefenderID())) {
+    			return true;
+    		}
+    	}
+    	Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, lastTurnNumber);
+    	// Footman action completed
+    	for (ActionResult ar : actionResults.values()) {
+    		if (ar.getFeedback().toString().equals("INCOMPLETE")) {
+    			return true;
+    		}
+    	}
+    	
+    	return false;
     }
     
     /**
