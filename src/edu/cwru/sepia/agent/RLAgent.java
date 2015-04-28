@@ -39,6 +39,7 @@ public class RLAgent extends Agent {
     public Map<Integer, Double> footmenRewardMap;	// Maps myFootmen ID to their total reward
     
     public Double[] testingRewards;
+    public double cumulativeReward;
     public List<Double> averageCumulativeRewards;
 
     private List<Integer> myFootmen;	// Your footmen
@@ -106,8 +107,9 @@ public class RLAgent extends Agent {
                 weights[i] = random.nextDouble() * 2 - 1;
             }
         }
+        this.cumulativeReward = 0.0;
         this.averageCumulativeRewards = new LinkedList<Double>();
-        this.averageCumulativeRewards.add(0.0); 
+        this.averageCumulativeRewards.add(0.0);
     }
 
     /**
@@ -195,17 +197,21 @@ public class RLAgent extends Agent {
     	Map<Integer, Action> actionMap = new HashMap<Integer, Action>();
     	calculateFootmenRewards(stateView, historyView);	// Update the rewards for the new state.
     	
-    	if (significantEvent(stateView, historyView)) {
+    	if (significantEvent(stateView, historyView)) {    		    		
     		// Update the weights for each footman.
     		for (Integer id : myFootmen) {
-//    			updateWeights(	this.weights, 
-//    							this.featureVector, 
-//    							footmenRewardMap.get(id), 
-//    							stateView, 
-//    							historyView, 
-//    							id);
+    			int enemyId = selectAction(stateView, historyView, id);
+    			
+    			if (!freezeForEvaluation) {
+        			updateWeights(	this.weights, 
+							calculateFeatureVector(stateView, historyView, id, enemyId), 
+							footmenRewardMap.get(id), 
+							stateView, 
+							historyView, 
+							id);
+    			}
     			// Issue new actions.
-    	    	actionMap.put(id, Action.createCompoundAttack(id, selectAction(stateView, historyView, id)));
+    	    	actionMap.put(id, Action.createCompoundAttack(id, enemyId));
     		}
     	}
     	// It's not the first turn.
@@ -265,12 +271,16 @@ public class RLAgent extends Agent {
     		freezeForEvaluation = false;
     		completedTestingEpisodes = 0;
     		
-    		double sum = 0.0;
+//    		double sum = 0.0;
     		
-    		for (int i = 0; i < testingRewards.length; i++) {
-    			sum += testingRewards[i];
-    		}
-    		averageCumulativeRewards.add(sum /= 5);
+//    		for (int i = 0; i < testingRewards.length; i++) {
+//    			System.out.println("Reward at " + i + ": " + testingRewards[i]);
+//    			
+//    			sum += testingRewards[i];
+//    		}
+    		System.out.println("Average reward for this session: " + (cumulativeReward / 5));
+    		averageCumulativeRewards.add(cumulativeReward / 5);
+    		cumulativeReward = 0.0;
     	}
     	
     	// Increment total completed episodes.
@@ -301,14 +311,32 @@ public class RLAgent extends Agent {
      * @param footmanId The footman we are updating the weights for
      * @return The updated weight vector.
      */
-    public double[] updateWeights(Double[] previousWeights, Double[] previousFeatureVector, Double totalReward, State.StateView stateView, History.HistoryView historyView, int footmanId) {
-        // TODO: FINISH
+    public double[] updateWeights(Double[] previousWeights, double[] previousFeatureVector, Double totalReward, State.StateView stateView, History.HistoryView historyView, int footmanId) {
+    	
     	double[] updatedWeights = new double[previousWeights.length];
     	
+    	// wi = wi - [learningrate(-R(s, a) + gamma * max a'[q'(s,a) - q(s,a)])f(s, a)]
     	for (int i = 0; i < previousWeights.length; i++) {
     		// Modify updatedWeights[i]
-    		updatedWeights[i] = previousWeights[i] - learningRate;
-    		// wi = wi - [learningrate(-R(s, a) + gamma * max a'[q'(s,a) - q(s,a)])f(s, a)]
+    		double currentQValue = 0.0;
+    		
+    		for (int j = 0; j < previousFeatureVector.length; j++) {
+    			currentQValue += previousWeights[j] * previousFeatureVector[j];
+    		}
+    		double maxQValue = Double.NEGATIVE_INFINITY;
+    		
+    		for (Integer enemyId : enemyFootmen) {
+    			double tempQValue = calcQValue(stateView, historyView, footmanId, enemyId);
+    			
+    			if (tempQValue > maxQValue) {
+    				maxQValue = tempQValue;
+    			}
+    		}
+    		
+    		double targetQValue = totalReward + gamma * maxQValue;
+    		double squaredLoss = -1 * (targetQValue - currentQValue) * previousFeatureVector[i];    		
+    		
+    		updatedWeights[i] = previousWeights[i] - learningRate * squaredLoss;    		
     	}
     	
     	return updatedWeights;
@@ -657,7 +685,7 @@ public class RLAgent extends Agent {
     	for (Integer id : myFootmen) {
     		double stateReward = calculateReward(stateView, historyView, id);
     		double currentTotalReward = footmenRewardMap.get(id); 
-    		footmenRewardMap.put(id, currentTotalReward + stateReward);
+    		footmenRewardMap.put(id, currentTotalReward + stateReward);    		
     	}
     }
     
@@ -675,6 +703,7 @@ public class RLAgent extends Agent {
 			
 			// Remove any of the player's units that were killed in the last turn.
 			if (controllerId == playernum && myFootmen.contains(deadUnitID)) {
+				cumulativeReward += footmenRewardMap.get(deadUnitID);	// Update the cumulative reward.
 				myFootmen.remove(deadUnitID);
 			}
 			// Remove any of the enemy's units that were killed in the last turn.
