@@ -189,7 +189,7 @@ public class RLAgent extends Agent {
 //    							historyView, 
 //    							id);
     			// Issue new actions.
-    	    	actionMap.put(id, Action.createCompoundAttack(id, selectAction(stateView, historyView, id)));    	    	
+    	    	actionMap.put(id, Action.createCompoundAttack(id, selectAction(stateView, historyView, id)));
     		}
     	}
     	// It's not the first turn.
@@ -214,15 +214,20 @@ public class RLAgent extends Agent {
     @Override
     public void terminalStep(State.StateView stateView, History.HistoryView historyView) {
     	
-    	// Last step updates/cleanup
+    	// Last step updates and cleanup.
     	calculateFootmenRewards(stateView, historyView);
     	removeDeadUnits(stateView, historyView);
     	
-    	if (myFootmen.size() > 0) {
+    	System.out.println("Player " + playernum + " Units remaining: " + myFootmen.size());
+    	System.out.println("Enemy " + ENEMY_PLAYERNUM + " Units remaining: " + enemyFootmen.size());
+    	
+    	if (enemyFootmen.size() == 0 && myFootmen.size() > 0) {
     		// We win!
+    		System.out.println("The Player has WON with " + myFootmen.size() + " allied footmen remaining!");
     	}
-    	else if (enemyFootmen.size() > 0) {
+    	else if (myFootmen.size() == 0 && enemyFootmen.size() > 0) {
     		// We lose!
+    		System.out.println("The Player has LOST with " + enemyFootmen.size() + " enemy footmen remaining!");
     	}
 
         // MAKE SURE YOU CALL printTestData after you finish a test episode.
@@ -506,6 +511,7 @@ public class RLAgent extends Agent {
             	featureVector[4] = numAttackers > 0 ? (double)(1 / numAttackers) : 1;
         	}
     	}
+    	// Either the attacker or defender was destroyed during this call.
     	else {
     		featureVector[1] = 0;
     		featureVector[2] = 0;
@@ -551,9 +557,9 @@ public class RLAgent extends Agent {
     		}
     	}
     	Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, lastTurnNumber);
-    	// Footman action completed
+    	// Friendly footman action completed
     	for (ActionResult ar : actionResults.values()) {
-    		if (ar.getFeedback().toString().equals("INCOMPLETE")) {
+    		if (myFootmen.contains(ar.getAction().getUnitId()) && ar.getFeedback().toString().equals("INCOMPLETE")) {
             	// TODO: Remove
             	System.out.println("EVENT: Action completed");
     			
@@ -586,15 +592,16 @@ public class RLAgent extends Agent {
     private void removeDeadUnits(State.StateView stateView, History.HistoryView historyView) {
     	
     	for (DeathLog deathLog : historyView.getDeathLogs(stateView.getTurnNumber() - 1)) {
-			Integer deadUnitID = deathLog.getDeadUnitID();
-			System.out.println("Player: " + deathLog.getController() + " | Unit " + deadUnitID + " was killed.");
+			int controllerId = deathLog.getController();
+    		Integer deadUnitID = deathLog.getDeadUnitID();
+			System.out.println("Player: " + controllerId + " | Unit " + deadUnitID + " was killed.");
 			
 			// Remove any of the player's units that were killed in the last turn.
-			if (myFootmen.contains(deadUnitID)) {
+			if (controllerId == playernum && myFootmen.contains(deadUnitID)) {
 				myFootmen.remove(deadUnitID);
 			}
 			// Remove any of the enemy's units that were killed in the last turn.
-			else if (enemyFootmen.contains(deadUnitID)) {
+			else if (controllerId == ENEMY_PLAYERNUM && enemyFootmen.contains(deadUnitID)) {
 				enemyFootmen.remove(deadUnitID);
 			}
 			// An unidentified unit was killed and we don't know what to do with it.
